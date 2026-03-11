@@ -7,11 +7,13 @@ import ResetPasswordPage from "../../features/auth/ResetPassword";
 import DashboardLayout from "../../layouts/DashboardLayout";
 import ProtectedRoute from "../../shared/components/ProtectedRoute";
 import TradingPage from "../../pages/TradingPage";
+import AuthInitializer from "../../shared/components/AuthInitializer";
 
 export default function AppRouter() {
   return (
-    <BrowserRouter>
-      <Routes>
+    <AuthInitializer>
+      <BrowserRouter>
+        <Routes>
         {/* Public routes */}
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
@@ -37,6 +39,7 @@ export default function AppRouter() {
         <Route path="*" element={<Navigate to="/trade" replace />} />
       </Routes>
     </BrowserRouter>
+    </AuthInitializer>
   );
 }
 

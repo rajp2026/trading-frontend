@@ -11,7 +11,7 @@ const navItems = [
 ];
 
 export default function Navbar() {
-  const { user, refreshToken, logout } = useAuthStore();
+  const { user, logout } = useAuthStore();
   const navigate = useNavigate();
 
   const [showDropdown, setShowDropdown] = useState(false);
@@ -20,7 +20,7 @@ export default function Navbar() {
   const handleLogout = async () => {
     setLoggingOut(true);
     try {
-      if (refreshToken) await authService.logout(refreshToken);
+      await authService.logout();
     } catch {}
     logout();
     navigate("/login");

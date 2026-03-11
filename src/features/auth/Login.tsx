@@ -21,7 +21,7 @@ export default function LoginPage() {
     setLoading(true);
     try {
       const res = await authService.login(data);
-      setAuth(null, res.access_token, res.refresh_token);
+      setAuth(null, res.access_token);
       navigate("/trade");
     } catch (err: any) {
       setError(err.response?.data?.detail || "Login failed. Please try again.");

@@ -44,8 +44,7 @@ export default function RegisterPage() {
 
       setAuth(
         { id: user.id, email: user.email, username: user.username },
-        loginRes.access_token,
-        loginRes.refresh_token
+        loginRes.access_token
       );
       navigate("/trade");
     } catch (err: any) {
