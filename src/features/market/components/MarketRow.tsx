@@ -1,5 +1,3 @@
-import { useNavigate } from "react-router-dom";
-
 interface Props {
   symbol: string;
   price: string;
@@ -8,8 +6,6 @@ interface Props {
 }
 
 export default function MarketRow({ symbol, price, change, onClick }: Props) {
-  const navigate = useNavigate();
-
   const changeColor = change && change > 0 ? "text-green-500" : "text-red-500";
 
   return (
