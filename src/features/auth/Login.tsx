@@ -22,7 +22,7 @@ export default function LoginPage() {
     try {
       const res = await authService.login(data);
       setAuth(null, res.access_token);
-      navigate("/trade");
+      navigate("/market");
     } catch (err: any) {
       setError(err.response?.data?.detail || "Login failed. Please try again.");
     } finally {
@@ -44,9 +44,7 @@ export default function LoginPage() {
           <h1 className="text-3xl font-bold bg-gradient-to-r from-purple-400 to-cyan-400 bg-clip-text text-transparent">
             CryptoTrade
           </h1>
-          <p className="text-gray-500 mt-2 text-sm">
-            Paper trading platform
-          </p>
+          <p className="text-gray-500 mt-2 text-sm">Paper trading platform</p>
         </div>
 
         {/* Card */}
@@ -73,7 +71,9 @@ export default function LoginPage() {
                 className="w-full px-4 py-3 rounded-xl bg-white/5 border border-white/10 text-white placeholder-gray-600 focus:outline-none focus:border-purple-500/50 focus:ring-1 focus:ring-purple-500/25 transition-all"
               />
               {errors.email && (
-                <p className="text-red-400 text-xs mt-1">{errors.email.message}</p>
+                <p className="text-red-400 text-xs mt-1">
+                  {errors.email.message}
+                </p>
               )}
             </div>
 
@@ -88,7 +88,9 @@ export default function LoginPage() {
                 className="w-full px-4 py-3 rounded-xl bg-white/5 border border-white/10 text-white placeholder-gray-600 focus:outline-none focus:border-purple-500/50 focus:ring-1 focus:ring-purple-500/25 transition-all"
               />
               {errors.password && (
-                <p className="text-red-400 text-xs mt-1">{errors.password.message}</p>
+                <p className="text-red-400 text-xs mt-1">
+                  {errors.password.message}
+                </p>
               )}
             </div>
 
@@ -111,8 +113,12 @@ export default function LoginPage() {
                   <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
                     <circle
                       className="opacity-25"
-                      cx="12" cy="12" r="10"
-                      stroke="currentColor" strokeWidth="4" fill="none"
+                      cx="12"
+                      cy="12"
+                      r="10"
+                      stroke="currentColor"
+                      strokeWidth="4"
+                      fill="none"
                     />
                     <path
                       className="opacity-75"

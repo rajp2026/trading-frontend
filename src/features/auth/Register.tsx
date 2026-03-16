@@ -1,10 +1,7 @@
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { useNavigate, Link } from "react-router-dom";
-import {
-  authService,
-  type RegisterRequest,
-} from "../../core/auth/authservice";
+import { authService, type RegisterRequest } from "../../core/auth/authservice";
 import { useAuthStore } from "../../core/auth/authstore";
 
 interface RegisterForm extends RegisterRequest {
@@ -44,12 +41,12 @@ export default function RegisterPage() {
 
       setAuth(
         { id: user.id, email: user.email, username: user.username },
-        loginRes.access_token
+        loginRes.access_token,
       );
-      navigate("/trade");
+      navigate("/market");
     } catch (err: any) {
       setError(
-        err.response?.data?.detail || "Registration failed. Please try again."
+        err.response?.data?.detail || "Registration failed. Please try again.",
       );
     } finally {
       setLoading(false);
@@ -175,8 +172,12 @@ export default function RegisterPage() {
                   <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
                     <circle
                       className="opacity-25"
-                      cx="12" cy="12" r="10"
-                      stroke="currentColor" strokeWidth="4" fill="none"
+                      cx="12"
+                      cy="12"
+                      r="10"
+                      stroke="currentColor"
+                      strokeWidth="4"
+                      fill="none"
                     />
                     <path
                       className="opacity-75"

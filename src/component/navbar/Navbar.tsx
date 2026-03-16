@@ -37,10 +37,8 @@ export default function Navbar() {
 
   return (
     <header className="flex-shrink-0 flex items-center justify-between px-6 h-14 border-b border-white/5 bg-[#0d0d14]/80 backdrop-blur-md">
-
       {/* Left Section */}
       <div className="flex items-center gap-8">
-
         {/* Logo */}
         <span className="text-lg font-bold bg-gradient-to-r from-purple-400 to-cyan-400 bg-clip-text text-transparent">
           CryptoTrade
@@ -64,17 +62,14 @@ export default function Navbar() {
             </NavLink>
           ))}
         </nav>
-
       </div>
 
       {/* Right Section */}
       <div className="relative">
-
         <button
           onClick={() => setShowDropdown((v) => !v)}
           className="flex items-center gap-2 px-3 py-1.5 rounded-lg hover:bg-white/5 transition-colors cursor-pointer"
         >
-
           {/* Avatar */}
           <div className="w-7 h-7 rounded-full bg-gradient-to-br from-purple-500 to-cyan-500 flex items-center justify-center text-xs font-bold">
             {user?.username?.[0]?.toUpperCase() || "U"}
@@ -86,10 +81,19 @@ export default function Navbar() {
           </span>
 
           {/* Arrow */}
-          <svg className="w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+          <svg
+            className="w-4 h-4 text-gray-500"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M19 9l-7 7-7-7"
+            />
           </svg>
-
         </button>
 
         {showDropdown && (
@@ -102,7 +106,6 @@ export default function Navbar() {
 
             {/* Dropdown */}
             <div className="absolute right-0 top-full mt-2 w-52 bg-[#16161e] border border-white/10 rounded-xl shadow-2xl z-50 py-1 overflow-hidden">
-
               <div className="px-4 py-3 border-b border-white/5">
                 <p className="text-sm font-medium text-white truncate">
                   {user?.username || "User"}
@@ -127,13 +130,10 @@ export default function Navbar() {
               >
                 Logout All Devices
               </button>
-
             </div>
           </>
         )}
-
       </div>
-
     </header>
   );
 }
