@@ -1,7 +1,7 @@
 export default function OrderBook() {
   return (
-    <div className="col-span-12 md:col-span-3 lg:col-span-3 bg-[#0d0d14] flex flex-col border h-[55vh]">
-      <div className="px-3 py-2.5 border-b border-white/5">
+    <div className="flex flex-col h-full bg-[#131722] text-gray-200">
+      <div className="px-3 py-2.5 border-b border-[#1e222d] shrink-0">
         <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider">
           Order Book
         </h3>

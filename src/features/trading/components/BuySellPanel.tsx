@@ -1,6 +1,6 @@
 export default function BuySellPanel() {
   return (
-    <div className="col-span-12 lg:col-span-3 bg-[#0d0d14] flex flex-col border h-[35vh]">
+    <div className="flex flex-col h-full bg-[#131722]">
       <div className="px-3 py-2.5 border-b border-white/5 flex gap-1">
         <button className="flex-1 py-1.5 text-xs font-semibold rounded-lg bg-green-500/10 text-green-400 border border-green-500/20">
           Buy
