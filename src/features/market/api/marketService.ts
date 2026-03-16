@@ -3,7 +3,6 @@ import { apiClient } from "../../../core/api/apiClient";
 export const marketService = {
   async getTickers() {
     const res = await apiClient.get("market/tickers");
-    debugger;
     return res.data;
   },
 
