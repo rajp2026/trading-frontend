@@ -14,6 +14,10 @@ export default function TradingChart() {
   const candleSeriesRef = useRef<ISeriesApi<"Candlestick"> | null>(null);
   const interval = useTradingStore((s) => s.interval);
   const symbol = useTradingStore((s) => s.selectedSymbol);
+
+  const candlesRef = useRef<any[]>([]);
+  const isFetchingOlderRef = useRef(false);
+
   // Create chart (runs once)
   useEffect(() => {
     if (!chartContainerRef.current) return;
@@ -64,6 +68,41 @@ export default function TradingChart() {
         };
       },
     });
+
+    chart.timeScale().subscribeVisibleLogicalRangeChange(async (range) => {
+      if (!range || !candlesRef.current.length || isFetchingOlderRef.current) return;
+
+      if (range.from < 50) {
+        isFetchingOlderRef.current = true;
+        try {
+          const firstCandle = candlesRef.current[0];
+          
+          const currentSymbol = useTradingStore.getState().selectedSymbol;
+          const currentInterval = useTradingStore.getState().interval;
+
+          // Multiply by 1000 because lightweight-charts uses seconds but Binance expects milliseconds
+          const older = await candleService.getCandles(
+            currentSymbol,
+            currentInterval,
+            firstCandle.time * 1000,
+          );
+
+          if (!older || !older.length) return;
+
+          // Filter out overlapping candle (Binance endTime is inclusive)
+          const filteredOlder = older.filter((c: any) => c.time < firstCandle.time);
+          
+          if (!filteredOlder.length) return;
+
+          candlesRef.current = [...filteredOlder, ...candlesRef.current];
+          candleSeriesRef.current?.setData(candlesRef.current);
+        } catch (error) {
+          console.error("Failed to fetch older candles:", error);
+        } finally {
+          isFetchingOlderRef.current = false;
+        }
+      }
+    });
     chart.priceScale("right").applyOptions({
       autoScale: true,
     });
@@ -78,6 +117,7 @@ export default function TradingChart() {
     const loadCandles = async () => {
       if (!candleSeriesRef.current) return;
       const candles = await candleService.getCandles(symbol, interval);
+      candlesRef.current = candles;
       candleSeriesRef.current.setData(candles);
       chartRef.current?.timeScale().fitContent();
     };
@@ -93,3 +133,7 @@ export default function TradingChart() {
     </div>
   );
 }
+
+// logic behind how infinit candles loads when user scroll towards left, side means loading older data
+// user scroll left -> chart detects near beginninr of data -> frontend charts request older candles, -> backed fetches candles using endtime -> then prepends to candles to chart
+//
