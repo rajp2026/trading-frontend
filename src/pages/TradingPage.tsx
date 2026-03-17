@@ -18,7 +18,7 @@ export default function TradingPage() {
         <div className="flex-1 min-h-0 flex flex-col bg-[#131722] rounded-xl border border-[#1e222d] overflow-hidden">
           <TradingChart />
         </div>
-        
+
         {/* Bottom: Buy/Sell Panel */}
         <div className="h-[260px] shrink-0 bg-[#131722] rounded-xl border border-[#1e222d] overflow-hidden">
           <BuySellPanel />
@@ -31,7 +31,7 @@ export default function TradingPage() {
         <div className="flex-1 bg-[#131722] rounded-xl border border-[#1e222d] min-h-0 overflow-hidden">
           <OrderBook />
         </div>
-        
+
         {/* Bottom: Order History */}
         <div className="h-[350px] bg-[#131722] rounded-xl border border-[#1e222d] shrink-0 overflow-hidden">
           <TradeHistory />
@@ -40,4 +40,3 @@ export default function TradingPage() {
     </div>
   );
 }
-

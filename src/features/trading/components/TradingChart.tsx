@@ -153,17 +153,47 @@ export default function TradingChart() {
 
       const price = Number(update.price);
       
-      let currentCandle = { ...lastCandleRef.current };
+      const getIntervalSeconds = (intv: string) => {
+        if (!intv) return 60;
+        const value = parseInt(intv);
+        const unit = intv.slice(-1);
+        if (unit === "m") return value * 60;
+        if (unit === "h") return value * 3600;
+        if (unit === "d") return value * 86400;
+        return 60; // default 1m
+      };
 
-      // Temporarily disabled new candle formation for debugging
-      // Update existing candle
-      currentCandle.close = price;
-      currentCandle.high = Math.max(currentCandle.high, price);
-      currentCandle.low = Math.min(currentCandle.low, price);
+      const currentTimeSeconds = Math.floor(Date.now() / 1000);
+      const intervalSeconds = getIntervalSeconds(useTradingStore.getState().interval);
+      let currentCandle = { ...lastCandleRef.current };
+      const candleTime = Number(currentCandle.time);
+
+      // Check if current timestamp has crossed into the next interval window
+      if (!isNaN(candleTime) && currentTimeSeconds >= candleTime + intervalSeconds) {
+        console.log(`[WS] 🕯️ Interval boundary crossed. Forming brand new candle!`);
+        
+        // Ensure new candle open time aligns with the exact interval span
+        const nextTime = candleTime + intervalSeconds;
+        
+        currentCandle = {
+          time: nextTime as any,
+          open: currentCandle.close, // New candle opens exactly where the last one closed
+          high: price,
+          low: price,
+          close: price,
+        };
+
+        candlesRef.current.push(currentCandle);
+      } else {
+        // Update existing candle limits
+        currentCandle.close = price;
+        currentCandle.high = Math.max(currentCandle.high, price);
+        currentCandle.low = Math.min(currentCandle.low, price);
+      }
 
       console.log(`[WS] Updating candle ${currentCandle.time} - Close: ${currentCandle.close}, High: ${currentCandle.high}, Low: ${currentCandle.low}`);
 
-      // lightweight-charts requires the exact same time value to update an existing candle
+      // lightweight-charts needs the exact same time to update an existing candle, or a strictly increasing time to append
       candleSeriesRef.current.update(currentCandle);
       lastCandleRef.current = currentCandle;
     };
