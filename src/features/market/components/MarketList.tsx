@@ -11,7 +11,8 @@ export default function MarketList() {
   const setSymbol = useTradingStore((state) => state.setSymbol);
   const setTickers = useMarketStore((s) => s.setTickers);
 
-  useMarketStream();
+  const symbols = Object.keys(tickers);
+  useMarketStream(symbols);
 
   useEffect(() => {
     const load = async () => {
