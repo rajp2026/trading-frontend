@@ -8,6 +8,7 @@ import {
 import { useTradingStore } from "../../market/store/tradingStore";
 import { candleService } from "../../../core/api/candleService";
 import TimeframeSelector from "./TimeFrameSelector";
+
 export default function TradingChart() {
   const chartContainerRef = useRef<HTMLDivElement | null>(null);
   const chartRef = useRef<IChartApi | null>(null);
@@ -17,6 +18,7 @@ export default function TradingChart() {
 
   const candlesRef = useRef<any[]>([]);
   const isFetchingOlderRef = useRef(false);
+  const lastCandleRef = useRef<any>(false);
 
   // Create chart (runs once)
   useEffect(() => {
@@ -70,13 +72,14 @@ export default function TradingChart() {
     });
 
     chart.timeScale().subscribeVisibleLogicalRangeChange(async (range) => {
-      if (!range || !candlesRef.current.length || isFetchingOlderRef.current) return;
+      if (!range || !candlesRef.current.length || isFetchingOlderRef.current)
+        return;
 
       if (range.from < 50) {
         isFetchingOlderRef.current = true;
         try {
           const firstCandle = candlesRef.current[0];
-          
+
           const currentSymbol = useTradingStore.getState().selectedSymbol;
           const currentInterval = useTradingStore.getState().interval;
 
@@ -90,8 +93,10 @@ export default function TradingChart() {
           if (!older || !older.length) return;
 
           // Filter out overlapping candle (Binance endTime is inclusive)
-          const filteredOlder = older.filter((c: any) => c.time < firstCandle.time);
-          
+          const filteredOlder = older.filter(
+            (c: any) => c.time < firstCandle.time,
+          );
+
           if (!filteredOlder.length) return;
 
           candlesRef.current = [...filteredOlder, ...candlesRef.current];
@@ -112,12 +117,71 @@ export default function TradingChart() {
       chart.remove();
     };
   }, []);
+
+  useEffect(() => {
+    const ws = new WebSocket("ws://localhost:8000/ws/market");
+
+    ws.onopen = () => {
+      console.log("WS Connected ✅");
+      ws.send(
+        JSON.stringify({
+          type: "subscribe",
+          symbols: [symbol],
+        }),
+      );
+    };
+
+    ws.onmessage = (event) => {
+      const msg = JSON.parse(event.data);
+      console.log(`[WS DEBUG] Received message type:`, msg.type);
+      
+      if (msg.type !== "market_batch") return;
+
+      // Try fuzzy matching in case backend sends BTCUSDT instead of BTC_USDT (or vice versa)
+      const update = msg.data.find((d: any) => 
+        d.symbol === symbol || 
+        d.symbol.replace(/_|-/g, "").toUpperCase() === symbol.replace(/_|-/g, "").toUpperCase()
+      );
+      
+      if (!update) {
+        return;
+      }
+      
+      if (!lastCandleRef.current || !candleSeriesRef.current || !candlesRef.current) {
+        return;
+      }
+
+      const price = Number(update.price);
+      
+      let currentCandle = { ...lastCandleRef.current };
+
+      // Temporarily disabled new candle formation for debugging
+      // Update existing candle
+      currentCandle.close = price;
+      currentCandle.high = Math.max(currentCandle.high, price);
+      currentCandle.low = Math.min(currentCandle.low, price);
+
+      console.log(`[WS] Updating candle ${currentCandle.time} - Close: ${currentCandle.close}, High: ${currentCandle.high}, Low: ${currentCandle.low}`);
+
+      // lightweight-charts requires the exact same time value to update an existing candle
+      candleSeriesRef.current.update(currentCandle);
+      lastCandleRef.current = currentCandle;
+    };
+
+    ws.onclose = () => {
+      console.log("WS Closed ❌");
+    };
+
+    return () => ws.close();
+  }, [symbol]);
+
   // Load candles when symbol changes
   useEffect(() => {
     const loadCandles = async () => {
       if (!candleSeriesRef.current) return;
       const candles = await candleService.getCandles(symbol, interval);
       candlesRef.current = candles;
+      lastCandleRef.current = candles[candles.length - 1];
       candleSeriesRef.current.setData(candles);
       chartRef.current?.timeScale().fitContent();
     };
