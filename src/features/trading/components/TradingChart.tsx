@@ -19,6 +19,7 @@ export default function TradingChart() {
   const candlesRef = useRef<any[]>([]);
   const isFetchingOlderRef = useRef(false);
   const lastCandleRef = useRef<any>(false);
+  const wsRef = useRef<WebSocket | null>(null);
 
   // Create chart (runs once)
   useEffect(() => {
@@ -83,7 +84,6 @@ export default function TradingChart() {
           const currentSymbol = useTradingStore.getState().selectedSymbol;
           const currentInterval = useTradingStore.getState().interval;
 
-          // Multiply by 1000 because lightweight-charts uses seconds but Binance expects milliseconds
           const older = await candleService.getCandles(
             currentSymbol,
             currentInterval,
@@ -92,7 +92,6 @@ export default function TradingChart() {
 
           if (!older || !older.length) return;
 
-          // Filter out overlapping candle (Binance endTime is inclusive)
           const filteredOlder = older.filter(
             (c: any) => c.time < firstCandle.time,
           );
@@ -108,6 +107,7 @@ export default function TradingChart() {
         }
       }
     });
+
     chart.priceScale("right").applyOptions({
       autoScale: true,
     });
@@ -118,38 +118,35 @@ export default function TradingChart() {
     };
   }, []);
 
+  // Handle WebSocket Connection and Data Updates
   useEffect(() => {
     const ws = new WebSocket("ws://localhost:8000/ws/market");
+    wsRef.current = ws;
 
     ws.onopen = () => {
-      console.log("WS Connected ✅");
+      console.log("Chart WS Connected ✅");
+      // Initial subscribe
       ws.send(
         JSON.stringify({
           type: "subscribe",
-          symbols: [symbol],
+          symbols: [useTradingStore.getState().selectedSymbol],
         }),
       );
     };
 
     ws.onmessage = (event) => {
       const msg = JSON.parse(event.data);
-      console.log(`[WS DEBUG] Received message type:`, msg.type);
-      
       if (msg.type !== "market_batch") return;
 
-      // Try fuzzy matching in case backend sends BTCUSDT instead of BTC_USDT (or vice versa)
+      const currentSymbol = useTradingStore.getState().selectedSymbol;
+
       const update = msg.data.find((d: any) => 
-        d.symbol === symbol || 
-        d.symbol.replace(/_|-/g, "").toUpperCase() === symbol.replace(/_|-/g, "").toUpperCase()
+        d.symbol === currentSymbol || 
+        d.symbol.replace(/_|-/g, "").toUpperCase() === currentSymbol.replace(/_|-/g, "").toUpperCase()
       );
       
-      if (!update) {
-        return;
-      }
-      
-      if (!lastCandleRef.current || !candleSeriesRef.current || !candlesRef.current) {
-        return;
-      }
+      if (!update) return;
+      if (!lastCandleRef.current || !candleSeriesRef.current || !candlesRef.current) return;
 
       const price = Number(update.price);
       
@@ -160,7 +157,7 @@ export default function TradingChart() {
         if (unit === "m") return value * 60;
         if (unit === "h") return value * 3600;
         if (unit === "d") return value * 86400;
-        return 60; // default 1m
+        return 60;
       };
 
       const currentTimeSeconds = Math.floor(Date.now() / 1000);
@@ -168,47 +165,56 @@ export default function TradingChart() {
       let currentCandle = { ...lastCandleRef.current };
       const candleTime = Number(currentCandle.time);
 
-      // Check if current timestamp has crossed into the next interval window
       if (!isNaN(candleTime) && currentTimeSeconds >= candleTime + intervalSeconds) {
-        console.log(`[WS] 🕯️ Interval boundary crossed. Forming brand new candle!`);
-        
-        // Ensure new candle open time aligns with the exact interval span
         const nextTime = candleTime + intervalSeconds;
-        
         currentCandle = {
           time: nextTime as any,
-          open: currentCandle.close, // New candle opens exactly where the last one closed
+          open: currentCandle.close,
           high: price,
           low: price,
           close: price,
         };
-
         candlesRef.current.push(currentCandle);
       } else {
-        // Update existing candle limits
         currentCandle.close = price;
         currentCandle.high = Math.max(currentCandle.high, price);
         currentCandle.low = Math.min(currentCandle.low, price);
       }
 
-      console.log(`[WS] Updating candle ${currentCandle.time} - Close: ${currentCandle.close}, High: ${currentCandle.high}, Low: ${currentCandle.low}`);
-
-      // lightweight-charts needs the exact same time to update an existing candle, or a strictly increasing time to append
       candleSeriesRef.current.update(currentCandle);
       lastCandleRef.current = currentCandle;
     };
 
-    ws.onclose = () => {
-      console.log("WS Closed ❌");
-    };
+    ws.onerror = (err) => console.error("Chart WS Error:", err);
+    ws.onclose = () => console.log("Chart WS Closed ❌");
 
-    return () => ws.close();
+    return () => {
+      ws.close();
+      wsRef.current = null;
+    };
+  }, []);
+
+  // Update backend subscription when symbol changes
+  useEffect(() => {
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
+      console.log(`[Chart] Switching subscription to: ${symbol}`);
+      wsRef.current.send(
+        JSON.stringify({
+          type: "subscribe",
+          symbols: [symbol],
+        }),
+      );
+    }
   }, [symbol]);
 
-  // Load candles when symbol changes
+  // Load Initial Candles when symbol changes
   useEffect(() => {
     const loadCandles = async () => {
       if (!candleSeriesRef.current) return;
+      
+      // Clear current data while loading
+      candleSeriesRef.current.setData([]);
+      
       const candles = await candleService.getCandles(symbol, interval);
       candlesRef.current = candles;
       lastCandleRef.current = candles[candles.length - 1];
@@ -217,17 +223,15 @@ export default function TradingChart() {
     };
     loadCandles();
   }, [symbol, interval]);
+
   return (
     <div className="flex flex-col h-full w-full bg-[#131722]">
-      <div className="text-white text-sm px-3 py-2 border-b border-[#1e222d]">
-        {symbol}
+      <div className="text-white text-sm px-3 py-2 border-b border-[#1e222d] flex justify-between items-center">
+        <span className="font-semibold">{symbol.replace("_", "/").toUpperCase()}</span>
+        <span className="text-xs text-gray-500 uppercase">{interval}</span>
       </div>
       <TimeframeSelector />
       <div ref={chartContainerRef} className="flex-1 min-h-0" />
     </div>
   );
 }
-
-// logic behind how infinit candles loads when user scroll towards left, side means loading older data
-// user scroll left -> chart detects near beginninr of data -> frontend charts request older candles, -> backed fetches candles using endtime -> then prepends to candles to chart
-//
