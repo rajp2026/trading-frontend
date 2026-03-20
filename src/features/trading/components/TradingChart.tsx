@@ -7,6 +7,7 @@ import {
 } from "lightweight-charts";
 import { useTradingStore } from "../../market/store/tradingStore";
 import { candleService } from "../../../core/api/candleService";
+import { wsManager } from "../../../core/ws/wsManager";
 import TimeframeSelector from "./TimeFrameSelector";
 
 export default function TradingChart() {
@@ -18,10 +19,13 @@ export default function TradingChart() {
 
   const candlesRef = useRef<any[]>([]);
   const isFetchingOlderRef = useRef(false);
-  const lastCandleRef = useRef<any>(false);
-  const wsRef = useRef<WebSocket | null>(null);
 
+  // Track previous subscription for cleanup
+  const prevSubRef = useRef<{ symbol: string; interval: string } | null>(null);
+
+  // ──────────────────────────────────────────────
   // Create chart (runs once)
+  // ──────────────────────────────────────────────
   useEffect(() => {
     if (!chartContainerRef.current) return;
     const chart = createChart(chartContainerRef.current, {
@@ -54,6 +58,7 @@ export default function TradingChart() {
         mode: 0,
       },
     });
+
     const candleSeries = chart.addSeries(CandlestickSeries, {
       priceFormat: {
         type: "price",
@@ -72,6 +77,7 @@ export default function TradingChart() {
       },
     });
 
+    // Scroll-back: load older candles when user scrolls left
     chart.timeScale().subscribeVisibleLogicalRangeChange(async (range) => {
       if (!range || !candlesRef.current.length || isFetchingOlderRef.current)
         return;
@@ -80,7 +86,6 @@ export default function TradingChart() {
         isFetchingOlderRef.current = true;
         try {
           const firstCandle = candlesRef.current[0];
-
           const currentSymbol = useTradingStore.getState().selectedSymbol;
           const currentInterval = useTradingStore.getState().interval;
 
@@ -111,113 +116,92 @@ export default function TradingChart() {
     chart.priceScale("right").applyOptions({
       autoScale: true,
     });
+
     chartRef.current = chart;
     candleSeriesRef.current = candleSeries;
+
     return () => {
       chart.remove();
     };
   }, []);
 
-  // Handle WebSocket Connection and Data Updates
+  // ──────────────────────────────────────────────
+  // Candle WS subscription + handler
+  // (re-runs when symbol or interval changes)
+  // ──────────────────────────────────────────────
   useEffect(() => {
-    const ws = new WebSocket("ws://localhost:8000/ws/market");
-    wsRef.current = ws;
-
-    ws.onopen = () => {
-      console.log("Chart WS Connected ✅");
-      // Initial subscribe
-      ws.send(
-        JSON.stringify({
-          type: "subscribe",
-          symbols: [useTradingStore.getState().selectedSymbol],
-        }),
-      );
-    };
-
-    ws.onmessage = (event) => {
-      const msg = JSON.parse(event.data);
-      if (msg.type !== "market_batch") return;
-
-      const currentSymbol = useTradingStore.getState().selectedSymbol;
-
-      const update = msg.data.find((d: any) => 
-        d.symbol === currentSymbol || 
-        d.symbol.replace(/_|-/g, "").toUpperCase() === currentSymbol.replace(/_|-/g, "").toUpperCase()
-      );
-      
-      if (!update) return;
-      if (!lastCandleRef.current || !candleSeriesRef.current || !candlesRef.current) return;
-
-      const price = Number(update.price);
-      
-      const getIntervalSeconds = (intv: string) => {
-        if (!intv) return 60;
-        const value = parseInt(intv);
-        const unit = intv.slice(-1);
-        if (unit === "m") return value * 60;
-        if (unit === "h") return value * 3600;
-        if (unit === "d") return value * 86400;
-        return 60;
-      };
-
-      const currentTimeSeconds = Math.floor(Date.now() / 1000);
-      const intervalSeconds = getIntervalSeconds(useTradingStore.getState().interval);
-      let currentCandle = { ...lastCandleRef.current };
-      const candleTime = Number(currentCandle.time);
-
-      if (!isNaN(candleTime) && currentTimeSeconds >= candleTime + intervalSeconds) {
-        const nextTime = candleTime + intervalSeconds;
-        currentCandle = {
-          time: nextTime as any,
-          open: currentCandle.close,
-          high: price,
-          low: price,
-          close: price,
-        };
-        candlesRef.current.push(currentCandle);
-      } else {
-        currentCandle.close = price;
-        currentCandle.high = Math.max(currentCandle.high, price);
-        currentCandle.low = Math.min(currentCandle.low, price);
-      }
-
-      candleSeriesRef.current.update(currentCandle);
-      lastCandleRef.current = currentCandle;
-    };
-
-    ws.onerror = (err) => console.error("Chart WS Error:", err);
-    ws.onclose = () => console.log("Chart WS Closed ❌");
-
-    return () => {
-      ws.close();
-      wsRef.current = null;
-    };
-  }, []);
-
-  // Update backend subscription when symbol changes
-  useEffect(() => {
-    if (wsRef.current?.readyState === WebSocket.OPEN) {
-      console.log(`[Chart] Switching subscription to: ${symbol}`);
-      wsRef.current.send(
-        JSON.stringify({
-          type: "subscribe",
-          symbols: [symbol],
-        }),
+    // Unsubscribe from previous
+    if (prevSubRef.current) {
+      wsManager.unsubscribeCandle(
+        prevSubRef.current.symbol,
+        prevSubRef.current.interval,
       );
     }
-  }, [symbol]);
 
-  // Load Initial Candles when symbol changes
+    // Subscribe to new
+    wsManager.subscribeCandle(symbol, interval);
+    prevSubRef.current = { symbol, interval };
+
+    // Handler for candle updates from backend
+    const handler = (msg: any) => {
+      if (msg.symbol !== symbol || msg.interval !== interval) return;
+      if (!candleSeriesRef.current) return;
+
+      const candle = msg.data;
+      if (!candle || !candle.time) return;
+
+      // Update the series directly — backend sends correct OHLCV
+      candleSeriesRef.current.update({
+        time: candle.time as any,
+        open: candle.open,
+        high: candle.high,
+        low: candle.low,
+        close: candle.close,
+      });
+
+      // Keep candlesRef in sync for scroll-back
+      const lastStored = candlesRef.current[candlesRef.current.length - 1];
+      if (lastStored && lastStored.time === candle.time) {
+        // Update in-place
+        candlesRef.current[candlesRef.current.length - 1] = {
+          time: candle.time,
+          open: candle.open,
+          high: candle.high,
+          low: candle.low,
+          close: candle.close,
+        };
+      } else if (!lastStored || candle.time > lastStored.time) {
+        // New candle
+        candlesRef.current.push({
+          time: candle.time,
+          open: candle.open,
+          high: candle.high,
+          low: candle.low,
+          close: candle.close,
+        });
+      }
+    };
+
+    wsManager.onMessage("candle_update", handler);
+
+    return () => {
+      wsManager.offMessage("candle_update", handler);
+    };
+  }, [symbol, interval]);
+
+  // ──────────────────────────────────────────────
+  // Load historical candles via REST
+  // (re-runs when symbol or interval changes)
+  // ──────────────────────────────────────────────
   useEffect(() => {
     const loadCandles = async () => {
       if (!candleSeriesRef.current) return;
-      
+
       // Clear current data while loading
       candleSeriesRef.current.setData([]);
-      
+
       const candles = await candleService.getCandles(symbol, interval);
       candlesRef.current = candles;
-      lastCandleRef.current = candles[candles.length - 1];
       candleSeriesRef.current.setData(candles);
       chartRef.current?.timeScale().fitContent();
     };

@@ -1,66 +1,33 @@
 import { useEffect, useRef } from "react";
 import { useMarketStore } from "../store/marketStore";
+import { wsManager } from "../../../core/ws/wsManager";
 
 export const useMarketStream = (symbols: string[]) => {
   const updateTickersBatch = useMarketStore((s) => s.updateTickersBatch);
-  const wsRef = useRef<WebSocket | null>(null);
   const lastSubscribedSymbolsRef = useRef<string>("");
 
+  // Register the market_batch handler once
   useEffect(() => {
-    const ws = new WebSocket("ws://localhost:8000/ws/market");
-    wsRef.current = ws;
-
-    ws.onopen = () => {
-      console.log("Market Stream Connected ✅");
-      if (symbols.length > 0) {
-        const symbolsStr = JSON.stringify(symbols.sort());
-        ws.send(
-          JSON.stringify({
-            type: "subscribe",
-            symbols: symbols,
-          })
-        );
-        lastSubscribedSymbolsRef.current = symbolsStr;
-      }
+    const handler = (msg: any) => {
+      updateTickersBatch(msg.data);
     };
 
-    ws.onmessage = (event) => {
-      const msg = JSON.parse(event.data);
-
-      if (msg.type === "market_batch") {
-        updateTickersBatch(msg.data);
-      }
-    };
-
-    ws.onerror = (err) => {
-      console.error("Market Stream Error:", err);
-    };
-
-    ws.onclose = () => {
-      console.log("Market Stream Closed ❌");
-    };
+    wsManager.onMessage("market_batch", handler);
 
     return () => {
-      ws.close();
-      wsRef.current = null;
+      wsManager.offMessage("market_batch", handler);
     };
-  }, []);
+  }, [updateTickersBatch]);
 
-  // Handle Dynamic Subscriptions (only if symbols actually changed)
+  // Send subscription when symbols change
   useEffect(() => {
-    if (wsRef.current?.readyState === WebSocket.OPEN && symbols.length > 0) {
-      const symbolsStr = JSON.stringify(symbols.sort());
-      
-      // Only send if the set of symbols has actually changed
-      if (symbolsStr !== lastSubscribedSymbolsRef.current) {
-        wsRef.current.send(
-          JSON.stringify({
-            type: "subscribe",
-            symbols: symbols,
-          })
-        );
-        lastSubscribedSymbolsRef.current = symbolsStr;
-      }
+    if (symbols.length === 0) return;
+
+    const symbolsStr = JSON.stringify(symbols.sort());
+
+    if (symbolsStr !== lastSubscribedSymbolsRef.current) {
+      wsManager.subscribeMarket(symbols);
+      lastSubscribedSymbolsRef.current = symbolsStr;
     }
   }, [symbols]);
 };
